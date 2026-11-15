@@ -35,6 +35,7 @@ Dialog {
 
     onStatusChanged: {
         if (status === PageStatus.Activating && editing) {
+            store.reload()
             var h = store.getHazard(hazardId)
             aircraftField.text = h.aircraft || ""
             systemField.text = h.system || ""
@@ -161,15 +162,22 @@ Dialog {
 
             ValueButton {
                 id: dueDateField
-                property string dateText: ""
+                property string dateText: ""   // stored in ISO format yyyy-MM-dd
 
                 width: parent.width
                 label: qsTr("Due date")
-                value: dateText
+                value: dateText === ""
+                       ? qsTr("Not set")
+                       : Qt.formatDate(new Date(dateText), "dd MMM yyyy")
                 onClicked: {
-                    var dialog = pageStack.push(datePickerComponent)
-                    dialog.accepted.connect(function() {
-                        dueDateField.dateText = dialog.dateText
+                    var initial = dateText !== "" ? new Date(dateText) : new Date()
+                    var picker = pageStack.push(datePickerComponent, { date: initial })
+                    picker.accepted.connect(function() {
+                        // Store the date in ISO format so HazardStore can parse
+                        // it back. Do NOT use picker.dateText — it is only a
+                        // human-readable label (e.g. "Thu 15 Jan") and is not
+                        // parseable as a date.
+                        dueDateField.dateText = Qt.formatDate(picker.date, "yyyy-MM-dd")
                     })
                 }
 
