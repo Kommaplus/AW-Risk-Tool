@@ -2,9 +2,9 @@ Name:       harbour-airworthiness
 
 Summary:    Airworthiness Risk Management
 Version:    0.1.0
-Release:    1
-License:    LICENSE
-URL:        http://example.org/
+Release:    2
+License:    BSD-3-Clause
+URL:        https://github.com/Kommaplus/AW-Risk-Tool
 Source0:    %{name}-%{version}.tar.bz2
 Requires:   sailfishsilica-qt5 >= 0.10.9
 BuildRequires:  pkgconfig(sailfishapp) >= 1.0.2
