@@ -354,6 +354,25 @@ int HazardStore::openCount() const
     return n;
 }
 
+void HazardStore::reload()
+{
+    m_all.clear();
+    m_nextId = 1;
+    load();
+    repopulate();
+}
+
+int HazardStore::countAt(int severity, int likelihood) const
+{
+    int n = 0;
+    for (const Hazard &h : m_all) {
+        if (h.severity == severity && h.likelihood == likelihood
+                && h.status != QStringLiteral("closed"))
+            ++n;
+    }
+    return n;
+}
+
 void HazardStore::setFilterStatus(const QString &status)
 {
     if (m_filterStatus == status)
