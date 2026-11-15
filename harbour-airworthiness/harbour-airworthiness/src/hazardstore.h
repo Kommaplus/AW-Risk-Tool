@@ -11,7 +11,7 @@ struct Hazard {
     QString system;       // affected system / ATA chapter
     QString title;
     QString description;
-    int severity = 1;      // 1..5
+    int severity = 1;      // 1..4
     int likelihood = 1;    // 1..5
     QString mitigation;
     QString owner;
@@ -54,6 +54,14 @@ public:
     Q_INVOKABLE QVariantMap getHazard(int id) const;
     Q_INVOKABLE int highestRiskIndex() const;
     Q_INVOKABLE int openCount() const;
+
+    // Re-read the saved hazards from disk. Each page keeps its own store
+    // instance, so pages must refresh when they become visible again.
+    Q_INVOKABLE void reload();
+
+    // Number of hazards that are not yet closed at a given matrix cell
+    // (severity 1..4, likelihood 1..5). Used by the risk matrix page.
+    Q_INVOKABLE int countAt(int severity, int likelihood) const;
 
     Q_INVOKABLE QString riskCategoryFor(int severity, int likelihood) const { return riskCategory(severity, likelihood); }
     Q_INVOKABLE QString riskColorFor(int severity, int likelihood) const { return riskColor(severity, likelihood); }
