@@ -30,7 +30,9 @@ Page {
                 color: Theme.secondaryColor
                 text: qsTr("Severity I–IV × Likelihood A–E. The Risk Assessment " +
                            "Code (e.g. IIE) determines the risk level: High, " +
-                           "Serious, Medium or Low.")
+                           "Serious, Medium or Low. Numbers show how many " +
+                           "hazards you have in each cell (closed hazards are " +
+                           "not counted).")
             }
 
             // Header row: likelihood codes A-E
@@ -83,6 +85,15 @@ Page {
                             radius: 4
                             color: store.riskColorFor(matrixRow.severity, index + 1)
                             opacity: 0.85
+
+                            Label {
+                                anchors.centerIn: parent
+                                text: store.countAt(matrixRow.severity, index + 1)
+                                font.pixelSize: Theme.fontSizeExtraSmall
+                                font.bold: true
+                                color: Theme.lightPrimaryColor
+                                visible: text > 0
+                            }
                         }
                     }
                 }
