@@ -13,6 +13,10 @@ Page {
 
     onStatusChanged: {
         if (status === PageStatus.Activating) {
+            // The page's store was created before the hazard may have been
+            // edited elsewhere (e.g. via this page's Edit menu): re-read from
+            // disk before showing the details.
+            store.reload()
             hazard = store.getHazard(hazardId)
             if (hazard && hazard.severity !== undefined) {
                 severity = hazard.severity
@@ -23,6 +27,26 @@ Page {
 
     HazardStore {
         id: store
+    }
+
+    PullDownMenu {
+        MenuItem {
+            text: qsTr("Edit")
+            onDelayedClick: pageStack.push(Qt.resolvedUrl("EditHazardPage.qml"),
+                                          { hazardId: page.hazardId })
+        }
+        MenuItem {
+            text: qsTr("Delete")
+            onDelayedClick: remorse.execute(qsTr("Deleting"))
+        }
+    }
+
+    RemorsePopup {
+        id: remorse
+        onTriggered: {
+            store.removeHazard(page.hazardId)
+            pageStack.pop()
+        }
     }
 
     SilicaFlickable {
@@ -126,7 +150,9 @@ Page {
             }
             DetailItem {
                 label: qsTr("Due")
-                value: hazard && hazard.dueDate ? hazard.dueDate : qsTr("—")
+                value: hazard && hazard.dueDate
+                      ? Qt.formatDate(new Date(hazard.dueDate), "dd MMM yyyy")
+                      : qsTr("—")
             }
         }
     }
