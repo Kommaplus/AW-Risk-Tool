@@ -12,11 +12,23 @@ Page {
         filterStatus: page.showOnlyOpen ? "open" : ""
     }
 
+    onStatusChanged: {
+        // Each page keeps its own HazardStore instance, and the main page
+        // outlives the edit pages: re-read the saved file whenever the
+        // list becomes visible again, so newly added/edited hazards show up.
+        if (status === PageStatus.Activating)
+            store.reload()
+    }
+
     SilicaListView {
         id: listView
         anchors.fill: parent
 
         PullDownMenu {
+            MenuItem {
+                text: qsTr("New hazard")
+                onDelayedClick: pageStack.push(Qt.resolvedUrl("EditHazardPage.qml"))
+            }
             MenuItem {
                 text: page.showOnlyOpen ? qsTr("Show all hazards")
                                         : qsTr("Show only open")
@@ -29,13 +41,6 @@ Page {
             MenuItem {
                 text: qsTr("About")
                 onDelayedClick: pageStack.push(Qt.resolvedUrl("AboutPage.qml"))
-            }
-        }
-
-        PushUpMenu {
-            MenuItem {
-                text: qsTr("New hazard")
-                onDelayedClick: pageStack.push(Qt.resolvedUrl("EditHazardPage.qml"))
             }
         }
 
