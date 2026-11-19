@@ -8,7 +8,7 @@
 struct Hazard {
     int id = 0;
     QString aircraft;      // registration or type
-    QString system;       // affected system / ATA chapter
+    QString system;        // affected system / ATA chapter
     QString title;
     QString description;
     int severity = 1;      // 1..4
@@ -37,7 +37,7 @@ public:
         AircraftRole, SystemRole, TitleRole, DescriptionRole,
         SeverityRole, SeverityNameRole, SeverityCodeRole,
         LikelihoodRole, LikelihoodNameRole, LikelihoodCodeRole,
-        RiskIndexRole, RiskCategoryRole, RiskColorRole,
+        RiskIndexRole, RiskCategoryRole, RiskColorRole, RacRole,
         MitigationRole, OwnerRole, StatusRole, DueDateRole,
         CreatedRole, UpdatedRole, HasDueDateRole
     };
@@ -65,6 +65,7 @@ public:
 
     Q_INVOKABLE QString riskCategoryFor(int severity, int likelihood) const { return riskCategory(severity, likelihood); }
     Q_INVOKABLE QString riskColorFor(int severity, int likelihood) const { return riskColor(severity, likelihood); }
+    Q_INVOKABLE int racFor(int severity, int likelihood) const { return rac(severity, likelihood); }
     Q_INVOKABLE QString severityNameFor(int severity) const { return severityName(severity); }
     Q_INVOKABLE QString likelihoodNameFor(int likelihood) const { return likelihoodName(likelihood); }
     Q_INVOKABLE QString severityCodeFor(int severity) const { return severityCode(severity); }
@@ -74,9 +75,12 @@ public:
     QString filterStatus() const { return m_filterStatus; }
     void setFilterStatus(const QString &status);
 
-    // AWB-150 4x5 matrix: severity 1..4 (I Catastrophic .. IV Negligible),
-    // likelihood 1..5 (A Frequent .. E Improbable). Returns 0=High, 1=Serious,
-    // 2=Medium, 3=Low.
+    // AWB-150B Attachment 2, Table 4. Severity 1..4 (I Catastrophic ..
+    // IV Negligible), likelihood 1..5 (A Frequent .. E Improbable).
+    // rac() returns the numeric Risk Assessment Code 1..20
+    // (1-5 High, 6-9 Serious, 10-17 Medium, 18-20 Low).
+    // riskLevel() returns 0=High, 1=Serious, 2=Medium, 3=Low.
+    static int rac(int severity, int likelihood);
     static int riskLevel(int severity, int likelihood);
     static QString riskCategory(int severity, int likelihood);
     static QString riskColor(int severity, int likelihood);
