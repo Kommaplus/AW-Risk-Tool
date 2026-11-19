@@ -55,19 +55,37 @@ HazardStore::HazardStore(QObject *parent)
     repopulate();
 }
 
-static const int s_awb150Matrix[4][5] = {
-    // likelihood A..E for each severity row
-    { 0, 0, 0, 1, 2 },   // I Catastrophic: High High High Serious Medium
-    { 0, 0, 1, 2, 2 },   // II Critical:    High High Serious Medium Medium
-    { 1, 1, 2, 2, 3 },   // III Marginal:   Serious Serious Medium Medium Low
-    { 2, 2, 2, 3, 3 },   // IV Negligible:  Medium Medium Medium Low Low
+// AWB-150B Attachment 2, Table 4 (same matrix as MIL-STD-882E Table III
+// and AFI 62-601 Table A2.2). Rows are probability levels A..E,
+// columns are severity categories 1..4; values are the numeric
+// Risk Assessment Code 1..20:
+//   1-5 High, 6-9 Serious, 10-17 Medium, 18-20 Low.
+static const int s_awb150Rac[5][4] = {
+    // I          II          III         IV
+    {  1,          3,          7,         13},   // A Frequent
+    {  2,          5,          9,         16},   // B Probable
+    {  4,          6,         11,         18},   // C Occasional
+    {  8,         10,         14,         19},   // D Remote
+    { 12,         15,         17,         20},   // E Improbable
 };
+
+int HazardStore::rac(int severity, int likelihood)
+{
+    const int s = qBound(1, severity, 4);
+    const int l = qBound(1, likelihood, 5);
+    return s_awb150Rac[l - 1][s - 1];
+}
 
 int HazardStore::riskLevel(int severity, int likelihood)
 {
-    int s = qBound(1, severity, 4);
-    int l = qBound(1, likelihood, 5);
-    return s_awb150Matrix[s - 1][l - 1];
+    const int r = rac(severity, likelihood);
+    if (r <= 5)
+        return 0;   // High
+    if (r <= 9)
+        return 1;   // Serious
+    if (r <= 17)
+        return 2;   // Medium
+    return 3;       // Low
 }
 
 QString HazardStore::riskCategory(int severity, int likelihood)
@@ -207,6 +225,7 @@ QHash<int, QByteArray> HazardStore::roleNames() const
     roles[RiskIndexRole] = "riskIndex";
     roles[RiskCategoryRole] = "riskCategory";
     roles[RiskColorRole] = "riskColor";
+    roles[RacRole] = "rac";
     roles[MitigationRole] = "mitigation";
     roles[OwnerRole] = "owner";
     roles[StatusRole] = "status";
@@ -237,6 +256,7 @@ QVariant HazardStore::data(const QModelIndex &index, int role) const
     case RiskIndexRole: return h.riskIndex();
     case RiskCategoryRole: return riskCategory(h.severity, h.likelihood);
     case RiskColorRole: return riskColor(h.severity, h.likelihood);
+    case RacRole: return rac(h.severity, h.likelihood);
     case MitigationRole: return h.mitigation;
     case OwnerRole: return h.owner;
     case StatusRole: return h.status;
