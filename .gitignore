@@ -1,0 +1,9 @@
+# Qt Creator bruger-indstillinger - skal aldrig committes
+*.pro.user
+*.pro.user.*
+
+# Byg-mapper fra Sailfish SDK
+build-*/
+
+# Oversatte sprogfiler (genereres automatisk)
+*.qm
