@@ -33,9 +33,15 @@ Dialog {
         id: store
     }
 
+      property bool fieldsLoaded: false
+
     onStatusChanged: {
-        if (status === PageStatus.Activating && editing) {
-            store.reload()
+        // Fyld felterne med hazardens gemte data KUN én gang, når redigeringen
+        // åbnes. PageStatus.Activating udløses også når man vender tilbage fra
+        // StatusPickerPage/DatePicker — og overskrev ellers brugerens nye
+        // indtastninger med de gamle gemte værdier, så ændringer blev tabt.
+        if (status === PageStatus.Activating && editing && !fieldsLoaded) {
+            fieldsLoaded = true
             var h = store.getHazard(hazardId)
             aircraftField.text = h.aircraft || ""
             systemField.text = h.system || ""
