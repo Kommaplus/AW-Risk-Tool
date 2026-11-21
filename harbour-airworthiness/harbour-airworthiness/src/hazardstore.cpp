@@ -22,6 +22,8 @@ QJsonObject Hazard::toJson() const
     o[QStringLiteral("owner")] = owner;
     o[QStringLiteral("status")] = status;
     o[QStringLiteral("dueDate")] = dueDate.isValid() ? dueDate.toString(Qt::ISODate) : QString();
+    o[QStringLiteral("acceptedBy")] = acceptedBy;
+    o[QStringLiteral("acceptedDate")] = acceptedDate.isValid() ? acceptedDate.toString(Qt::ISODate) : QString();
     o[QStringLiteral("created")] = createdMs;
     o[QStringLiteral("updated")] = updatedMs;
     return o;
@@ -41,6 +43,10 @@ Hazard Hazard::fromJson(const QJsonObject &obj)
     h.owner = obj[QStringLiteral("owner")].toString();
     h.status = obj[QStringLiteral("status")].toString();
     h.dueDate = QDate::fromString(obj[QStringLiteral("dueDate")].toString(), Qt::ISODate);
+    // Optional fields: hazards saved by older versions of the app have no
+    // acceptedBy/acceptedDate keys, and fromJson() then leaves them empty.
+    h.acceptedBy = obj[QStringLiteral("acceptedBy")].toString();
+    h.acceptedDate = QDate::fromString(obj[QStringLiteral("acceptedDate")].toString(), Qt::ISODate);
     h.createdMs = obj[QStringLiteral("created")].toVariant().toLongLong();
     h.updatedMs = obj[QStringLiteral("updated")].toVariant().toLongLong();
     if (h.status.isEmpty())
@@ -233,6 +239,9 @@ QHash<int, QByteArray> HazardStore::roleNames() const
     roles[CreatedRole] = "created";
     roles[UpdatedRole] = "updated";
     roles[HasDueDateRole] = "hasDueDate";
+    roles[AcceptedByRole] = "acceptedBy";
+    roles[AcceptedDateRole] = "acceptedDate";
+    roles[HasAcceptedDateRole] = "hasAcceptedDate";
     return roles;
 }
 
@@ -263,6 +272,10 @@ QVariant HazardStore::data(const QModelIndex &index, int role) const
     case DueDateRole: return h.dueDate.isValid()
             ? h.dueDate.toString(QStringLiteral("dd MMM yyyy")) : QString();
     case HasDueDateRole: return h.dueDate.isValid();
+    case AcceptedByRole: return h.acceptedBy;
+    case AcceptedDateRole: return h.acceptedDate.isValid()
+            ? h.acceptedDate.toString(QStringLiteral("dd MMM yyyy")) : QString();
+    case HasAcceptedDateRole: return h.acceptedDate.isValid();
     case CreatedRole: return h.createdMs;
     case UpdatedRole: return h.updatedMs;
     default: return QVariant();
@@ -291,6 +304,10 @@ static void fillHazard(Hazard &h, const QVariantMap &data, qlonglong nowMs)
         h.status = data[QStringLiteral("status")].toString();
     if (data.contains(QStringLiteral("dueDate")))
         h.dueDate = QDate::fromString(data[QStringLiteral("dueDate")].toString(), Qt::ISODate);
+    if (data.contains(QStringLiteral("acceptedBy")))
+        h.acceptedBy = data[QStringLiteral("acceptedBy")].toString();
+    if (data.contains(QStringLiteral("acceptedDate")))
+        h.acceptedDate = QDate::fromString(data[QStringLiteral("acceptedDate")].toString(), Qt::ISODate);
     h.updatedMs = nowMs;
 }
 
@@ -348,6 +365,9 @@ QVariantMap HazardStore::getHazard(int id) const
             map[QStringLiteral("status")] = h.status;
             map[QStringLiteral("dueDate")] = h.dueDate.isValid()
                     ? h.dueDate.toString(Qt::ISODate) : QString();
+            map[QStringLiteral("acceptedBy")] = h.acceptedBy;
+            map[QStringLiteral("acceptedDate")] = h.acceptedDate.isValid()
+                    ? h.acceptedDate.toString(Qt::ISODate) : QString();
             return map;
         }
     }
