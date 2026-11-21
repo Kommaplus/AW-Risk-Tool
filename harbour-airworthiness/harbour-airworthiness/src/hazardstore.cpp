@@ -24,6 +24,8 @@ QJsonObject Hazard::toJson() const
     o[QStringLiteral("dueDate")] = dueDate.isValid() ? dueDate.toString(Qt::ISODate) : QString();
     o[QStringLiteral("acceptedBy")] = acceptedBy;
     o[QStringLiteral("acceptedDate")] = acceptedDate.isValid() ? acceptedDate.toString(Qt::ISODate) : QString();
+    o[QStringLiteral("reviewInterval")] = reviewInterval;   // months, 0 = off
+    o[QStringLiteral("reviewedDate")] = lastReviewed.isValid() ? lastReviewed.toString(Qt::ISODate) : QString();
     o[QStringLiteral("created")] = createdMs;
     o[QStringLiteral("updated")] = updatedMs;
     return o;
@@ -44,14 +46,31 @@ Hazard Hazard::fromJson(const QJsonObject &obj)
     h.status = obj[QStringLiteral("status")].toString();
     h.dueDate = QDate::fromString(obj[QStringLiteral("dueDate")].toString(), Qt::ISODate);
     // Optional fields: hazards saved by older versions of the app have no
-    // acceptedBy/acceptedDate keys, and fromJson() then leaves them empty.
+    // acceptedBy/acceptedDate/reviewInterval/reviewedDate keys, and
+    // fromJson() then leaves them empty or off.
     h.acceptedBy = obj[QStringLiteral("acceptedBy")].toString();
     h.acceptedDate = QDate::fromString(obj[QStringLiteral("acceptedDate")].toString(), Qt::ISODate);
+    h.reviewInterval = qMax(0, obj[QStringLiteral("reviewInterval")].toInt());
+    h.lastReviewed = QDate::fromString(obj[QStringLiteral("reviewedDate")].toString(), Qt::ISODate);
     h.createdMs = obj[QStringLiteral("created")].toVariant().toLongLong();
     h.updatedMs = obj[QStringLiteral("updated")].toVariant().toLongLong();
     if (h.status.isEmpty())
         h.status = QStringLiteral("open");
     return h;
+}
+
+QDate Hazard::nextReviewDate() const
+{
+    // A recurring review is always based on the last review; a hazard that
+    // has never been reviewed counts from its creation date.
+    if (reviewInterval <= 0)
+        return QDate();
+    QDate base = lastReviewed.isValid()
+            ? lastReviewed
+            : QDateTime::fromMSecsSinceEpoch(createdMs).date();
+    if (!base.isValid())
+        return QDate();
+    return base.addMonths(reviewInterval);
 }
 
 HazardStore::HazardStore(QObject *parent)
@@ -156,6 +175,35 @@ QString HazardStore::likelihoodCode(int likelihood)
     }
 }
 
+QString HazardStore::statusLabelFor(const QString &status) const
+{
+    // Stored status values are lowercase keys in the JSON data
+    // ("open", "mitigated", "alarp", "transferred", "closed"); these
+    // labels are the only user-facing forms. Unknown values show as-is.
+    if (status == QStringLiteral("open"))
+        return QStringLiteral("Open");
+    if (status == QStringLiteral("mitigated"))
+        return QStringLiteral("Mitigated");
+    if (status == QStringLiteral("alarp"))
+        return QStringLiteral("As Low As Reasonably Practicable (ALARP)");
+    if (status == QStringLiteral("transferred"))
+        return QStringLiteral("Transferred to Operational Risk");
+    if (status == QStringLiteral("closed"))
+        return QStringLiteral("Closed");
+    return status;
+}
+
+QString HazardStore::reviewIntervalLabelFor(int months) const
+{
+    // Values match ReviewIntervalPickerPage.qml; months <= 0 disables
+    // the recurring review.
+    switch (months) {
+    case 0: return QStringLiteral("Off");
+    case 1: return QStringLiteral("Every month");
+    default: return QStringLiteral("Every %1 months").arg(months);
+    }
+}
+
 QString HazardStore::storagePath() const
 {
     QString base = QStandardPaths::writableLocation(QStandardPaths::DataLocation);
@@ -193,7 +241,16 @@ void HazardStore::repopulate()
     beginResetModel();
     m_visible.clear();
     for (const Hazard &h : m_all) {
-        if (m_filterStatus.isEmpty() || h.status == m_filterStatus)
+        // "active" is a virtual filter: hazards still managed in this
+        // register (open, mitigated, alarp). Closed and transferred
+        // hazards only show up when no filter is set.
+        const bool matches = m_filterStatus.isEmpty()
+                || h.status == m_filterStatus
+                || (m_filterStatus == QStringLiteral("active")
+                    && (h.status == QStringLiteral("open")
+                        || h.status == QStringLiteral("mitigated")
+                        || h.status == QStringLiteral("alarp")));
+        if (matches)
             m_visible.append(h);
     }
     std::sort(m_visible.begin(), m_visible.end(), [](const Hazard &a, const Hazard &b) {
@@ -242,6 +299,10 @@ QHash<int, QByteArray> HazardStore::roleNames() const
     roles[AcceptedByRole] = "acceptedBy";
     roles[AcceptedDateRole] = "acceptedDate";
     roles[HasAcceptedDateRole] = "hasAcceptedDate";
+    roles[ReviewIntervalRole] = "reviewInterval";
+    roles[ReviewedDateRole] = "reviewedDate";
+    roles[NextReviewRole] = "nextReview";
+    roles[ReviewDueRole] = "reviewDue";
     return roles;
 }
 
@@ -276,6 +337,20 @@ QVariant HazardStore::data(const QModelIndex &index, int role) const
     case AcceptedDateRole: return h.acceptedDate.isValid()
             ? h.acceptedDate.toString(QStringLiteral("dd MMM yyyy")) : QString();
     case HasAcceptedDateRole: return h.acceptedDate.isValid();
+    case ReviewIntervalRole: return h.reviewInterval;
+    case ReviewedDateRole: return h.lastReviewed.isValid()
+            ? h.lastReviewed.toString(QStringLiteral("dd MMM yyyy")) : QString();
+    case NextReviewRole: return h.nextReviewDate().isValid()
+            ? h.nextReviewDate().toString(QStringLiteral("dd MMM yyyy")) : QString();
+    case ReviewDueRole: {
+        // A recurring review is only due while the hazard is actively
+        // managed here; closed and transferred hazards are exempt.
+        // ALARP hazards are NOT exempt: the risk still exists.
+        const QDate next = h.nextReviewDate();
+        return next.isValid() && next <= QDate::currentDate()
+                && h.status != QStringLiteral("closed")
+                && h.status != QStringLiteral("transferred");
+    }
     case CreatedRole: return h.createdMs;
     case UpdatedRole: return h.updatedMs;
     default: return QVariant();
@@ -308,6 +383,10 @@ static void fillHazard(Hazard &h, const QVariantMap &data, qlonglong nowMs)
         h.acceptedBy = data[QStringLiteral("acceptedBy")].toString();
     if (data.contains(QStringLiteral("acceptedDate")))
         h.acceptedDate = QDate::fromString(data[QStringLiteral("acceptedDate")].toString(), Qt::ISODate);
+    if (data.contains(QStringLiteral("reviewInterval")))
+        h.reviewInterval = qMax(0, data[QStringLiteral("reviewInterval")].toInt());
+    if (data.contains(QStringLiteral("reviewedDate")))
+        h.lastReviewed = QDate::fromString(data[QStringLiteral("reviewedDate")].toString(), Qt::ISODate);
     h.updatedMs = nowMs;
 }
 
@@ -368,6 +447,19 @@ QVariantMap HazardStore::getHazard(int id) const
             map[QStringLiteral("acceptedBy")] = h.acceptedBy;
             map[QStringLiteral("acceptedDate")] = h.acceptedDate.isValid()
                     ? h.acceptedDate.toString(Qt::ISODate) : QString();
+            map[QStringLiteral("reviewInterval")] = h.reviewInterval;
+            map[QStringLiteral("reviewedDate")] = h.lastReviewed.isValid()
+                    ? h.lastReviewed.toString(Qt::ISODate) : QString();
+            // The next review date and the overdue flag are derived data,
+            // computed here so the detail page can show them without
+            // duplicating the calculation in QML.
+            const QDate next = h.nextReviewDate();
+            map[QStringLiteral("nextReview")] = next.isValid()
+                    ? next.toString(Qt::ISODate) : QString();
+            map[QStringLiteral("reviewDue")] = next.isValid()
+                    && next <= QDate::currentDate()
+                    && h.status != QStringLiteral("closed")
+                    && h.status != QStringLiteral("transferred");
             return map;
         }
     }
@@ -406,10 +498,13 @@ void HazardStore::reload()
 
 int HazardStore::countAt(int severity, int likelihood) const
 {
+    // Hazards transferred to the operational risk register no longer count
+    // in this matrix (like closed ones): they are managed elsewhere.
     int n = 0;
     for (const Hazard &h : m_all) {
         if (h.severity == severity && h.likelihood == likelihood
-                && h.status != QStringLiteral("closed"))
+                && h.status != QStringLiteral("closed")
+                && h.status != QStringLiteral("transferred"))
             ++n;
     }
     return n;
