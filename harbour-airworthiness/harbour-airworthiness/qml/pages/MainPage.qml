@@ -5,11 +5,13 @@ import harbour.airworthiness 1.0
 Page {
     id: page
 
-    property bool showOnlyOpen: true
+    property bool showOnlyActive: true
 
     HazardStore {
         id: store
-        filterStatus: page.showOnlyOpen ? "open" : ""
+        // "active" is a virtual filter (open / mitigated / alarp);
+        // an empty filter shows every hazard, including transferred.
+        filterStatus: page.showOnlyActive ? "active" : ""
     }
 
     onStatusChanged: {
@@ -30,9 +32,9 @@ Page {
                 onDelayedClick: pageStack.push(Qt.resolvedUrl("EditHazardPage.qml"))
             }
             MenuItem {
-                text: page.showOnlyOpen ? qsTr("Show all hazards")
-                                        : qsTr("Show only open")
-                onDelayedClick: page.showOnlyOpen = !page.showOnlyOpen
+                text: page.showOnlyActive ? qsTr("Show all hazards")
+                                          : qsTr("Show only active")
+                onDelayedClick: page.showOnlyActive = !page.showOnlyActive
             }
             MenuItem {
                 text: qsTr("Risk matrix")
@@ -67,9 +69,14 @@ Page {
                                                   { hazardId: model.id })
                 }
                 MenuItem {
-                    text: model.status === "closed" ? qsTr("Reopen") : qsTr("Close")
+                    // "Close" ends the hazard: the risk is eliminated or no
+                    // longer relevant. Closed and transferred hazards reopen;
+                    // open and mitigated hazards are closed by this action.
+                    text: model.status === "closed" || model.status === "transferred"
+                          ? qsTr("Reopen") : qsTr("Close")
                     onDelayedClick: store.updateHazard(model.id, {
-                        status: model.status === "closed" ? "open" : "closed"
+                        status: model.status === "closed" || model.status === "transferred"
+                                ? "open" : "closed"
                     })
                 }
                 MenuItem {
@@ -123,6 +130,15 @@ Page {
                     font.pixelSize: Theme.fontSizeExtraSmall
                     color: Theme.secondaryColor
                     truncationMode: TruncationMode.Fade
+                }
+
+                Label {
+                    width: parent.width
+                    visible: model.reviewDue
+                    // Red marker: the recurring review is overdue.
+                    text: qsTr("Review due")
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: "#e74c3c"
                 }
             }
 
