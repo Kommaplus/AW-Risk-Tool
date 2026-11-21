@@ -15,16 +15,21 @@ struct Hazard {
     int likelihood = 1;    // 1..5
     QString mitigation;
     QString owner;
-    QString status;        // open / mitigated / closed
+    QString status;        // open / mitigated / alarp / transferred / closed
     QDate dueDate;
     QString acceptedBy;    // person or authority accepting the residual risk
     QDate acceptedDate;    // date the residual risk was accepted
+    int reviewInterval = 0;   // recurring re-evaluation in months, 0 = off
+    QDate lastReviewed;      // date of the last re-evaluation, if any
     qlonglong createdMs = 0;
     qlonglong updatedMs = 0;
 
     QJsonObject toJson() const;
     static Hazard fromJson(const QJsonObject &obj);
     int riskIndex() const { return severity * likelihood; }  // HRI 1-20 (AWB-150 / MIL-STD-882 style)
+
+    // Next recurring review date (invalid when reviewInterval is 0).
+    QDate nextReviewDate() const;
 };
 
 class HazardStore : public QAbstractListModel
@@ -42,7 +47,8 @@ public:
         RiskIndexRole, RiskCategoryRole, RiskColorRole, RacRole,
         MitigationRole, OwnerRole, StatusRole, DueDateRole,
         CreatedRole, UpdatedRole, HasDueDateRole,
-        AcceptedByRole, AcceptedDateRole, HasAcceptedDateRole
+        AcceptedByRole, AcceptedDateRole, HasAcceptedDateRole,
+        ReviewIntervalRole, ReviewedDateRole, NextReviewRole, ReviewDueRole
     };
 
     explicit HazardStore(QObject *parent = nullptr);
@@ -74,6 +80,11 @@ public:
     Q_INVOKABLE QString severityCodeFor(int severity) const { return severityCode(severity); }
     Q_INVOKABLE QString likelihoodCodeFor(int likelihood) const { return likelihoodCode(likelihood); }
     Q_INVOKABLE QString riskCodeFor(int severity, int likelihood) const { return severityCode(severity) + likelihoodCode(likelihood); }
+    // User-facing label for a stored status value, e.g. "transferred"
+    // is shown as "Transferred to Operational Risk".
+    Q_INVOKABLE QString statusLabelFor(const QString &status) const;
+    // User-facing label for a review interval in months, 0 = "Off".
+    Q_INVOKABLE QString reviewIntervalLabelFor(int months) const;
 
     QString filterStatus() const { return m_filterStatus; }
     void setFilterStatus(const QString &status);
