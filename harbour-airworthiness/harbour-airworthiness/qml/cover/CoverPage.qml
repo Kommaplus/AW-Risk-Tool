@@ -14,7 +14,7 @@ CoverBackground {
                 ? qsTr("%1 open").arg(open)
                 : qsTr("All clear")
         var hri = coverStore.highestRiskIndex()
-        hriLabel.text = hri > 0 ? qsTr("Highest HRI: %1").arg(hri) : ""
+        hriLabel.text = hri > 0 ? qsTr("Highest RAC: %1").arg(hri) : ""
     }
 
     Column {
