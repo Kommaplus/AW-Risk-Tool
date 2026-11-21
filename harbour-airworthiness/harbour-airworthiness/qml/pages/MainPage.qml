@@ -6,12 +6,14 @@ Page {
     id: page
 
     property bool showOnlyActive: true
+    property string baselineFilter: ""   // empty = no baseline filtering
 
     HazardStore {
         id: store
         // "active" is a virtual filter (open / mitigated / alarp);
         // an empty filter shows every hazard, including transferred.
         filterStatus: page.showOnlyActive ? "active" : ""
+        baselineFilter: page.baselineFilter
     }
 
     onStatusChanged: {
@@ -35,6 +37,22 @@ Page {
                 text: page.showOnlyActive ? qsTr("Show all hazards")
                                           : qsTr("Show only active")
                 onDelayedClick: page.showOnlyActive = !page.showOnlyActive
+            }
+            MenuItem {
+                // Opens the baseline picker in filter mode. Choosing
+                // "All baselines" (the empty value) removes the filter.
+                text: page.baselineFilter === ""
+                      ? qsTr("Filter by certification baseline")
+                      : qsTr("Baseline filter: %1").arg(page.baselineFilter)
+                onDelayedClick: {
+                    var picker = pageStack.push(
+                                Qt.resolvedUrl("BaselinePickerPage.qml"),
+                                { currentBaseline: page.baselineFilter,
+                                  filterMode: true })
+                    picker.baselinePicked.connect(function(baseline) {
+                        page.baselineFilter = baseline
+                    })
+                }
             }
             MenuItem {
                 text: qsTr("Risk matrix")
