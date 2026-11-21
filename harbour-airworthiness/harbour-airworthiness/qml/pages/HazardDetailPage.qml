@@ -90,6 +90,13 @@ Page {
                         font.pixelSize: Theme.fontSizeSmall
                         color: Theme.secondaryColor
                     }
+                    Label {
+                        visible: hazard && hazard.reviewDue
+                        // Red marker: the recurring review is overdue.
+                        text: qsTr("Review due")
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: "#e74c3c"
+                    }
                 }
             }
 
@@ -144,6 +151,28 @@ Page {
                       : qsTr("—")
             }
 
+            SectionHeader { text: qsTr("Risk review (re-evaluation)") }
+
+            DetailItem {
+                label: qsTr("Review interval")
+                value: hazard && hazard.reviewInterval > 0
+                      ? store.reviewIntervalLabelFor(hazard.reviewInterval)
+                      : qsTr("—")
+            }
+            DetailItem {
+                label: qsTr("Last reviewed")
+                value: hazard && hazard.reviewedDate
+                      ? Qt.formatDate(new Date(hazard.reviewedDate), "dd MMM yyyy")
+                      : qsTr("Never")
+            }
+            DetailItem {
+                label: qsTr("Next review")
+                value: hazard && hazard.nextReview
+                      ? Qt.formatDate(new Date(hazard.nextReview), "dd MMM yyyy")
+                        + (hazard.reviewDue ? qsTr(" (overdue)") : "")
+                      : qsTr("—")
+            }
+
             SectionHeader { text: qsTr("Details") }
 
             DetailItem {
@@ -160,7 +189,7 @@ Page {
             }
             DetailItem {
                 label: qsTr("Status")
-                value: hazard ? hazard.status : ""
+                value: hazard ? store.statusLabelFor(hazard.status) : ""
             }
             DetailItem {
                 label: qsTr("Due")
