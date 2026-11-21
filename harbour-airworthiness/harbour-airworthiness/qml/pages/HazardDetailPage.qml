@@ -86,7 +86,7 @@ Page {
                         color: Theme.primaryColor
                     }
                     Label {
-                        text: qsTr("HRI %1").arg(severity * likelihood)
+                        text: qsTr("RAC %1").arg(store.racFor(severity, likelihood))
                         font.pixelSize: Theme.fontSizeSmall
                         color: Theme.secondaryColor
                     }
