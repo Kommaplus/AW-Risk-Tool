@@ -356,10 +356,12 @@ QVariantMap HazardStore::getHazard(int id) const
 
 int HazardStore::highestRiskIndex() const
 {
+    // Cover statistics: show the AWB-150 numeric RAC (1-20), not the
+    // plain severity*likelihood product, so cover matches the matrix.
     int highest = 0;
     for (const Hazard &h : m_visible) {
         if (h.status == QStringLiteral("open"))
-            highest = qMax(highest, h.riskIndex());  // keep numeric HRI for stats
+            highest = qMax(highest, rac(h.severity, h.likelihood));
     }
     return highest;
 }
