@@ -26,6 +26,8 @@ QJsonObject Hazard::toJson() const
     o[QStringLiteral("acceptedDate")] = acceptedDate.isValid() ? acceptedDate.toString(Qt::ISODate) : QString();
     o[QStringLiteral("reviewInterval")] = reviewInterval;   // months, 0 = off
     o[QStringLiteral("reviewedDate")] = lastReviewed.isValid() ? lastReviewed.toString(Qt::ISODate) : QString();
+    o[QStringLiteral("certBaseline")] = certBaseline;
+    o[QStringLiteral("certCriteria")] = certCriteria;
     o[QStringLiteral("created")] = createdMs;
     o[QStringLiteral("updated")] = updatedMs;
     return o;
@@ -46,12 +48,14 @@ Hazard Hazard::fromJson(const QJsonObject &obj)
     h.status = obj[QStringLiteral("status")].toString();
     h.dueDate = QDate::fromString(obj[QStringLiteral("dueDate")].toString(), Qt::ISODate);
     // Optional fields: hazards saved by older versions of the app have no
-    // acceptedBy/acceptedDate/reviewInterval/reviewedDate keys, and
-    // fromJson() then leaves them empty or off.
+    // acceptedBy/acceptedDate/reviewInterval/reviewedDate/certBaseline/
+    // certCriteria keys, and fromJson() then leaves them empty or off.
     h.acceptedBy = obj[QStringLiteral("acceptedBy")].toString();
     h.acceptedDate = QDate::fromString(obj[QStringLiteral("acceptedDate")].toString(), Qt::ISODate);
     h.reviewInterval = qMax(0, obj[QStringLiteral("reviewInterval")].toInt());
     h.lastReviewed = QDate::fromString(obj[QStringLiteral("reviewedDate")].toString(), Qt::ISODate);
+    h.certBaseline = obj[QStringLiteral("certBaseline")].toString();
+    h.certCriteria = obj[QStringLiteral("certCriteria")].toString();
     h.createdMs = obj[QStringLiteral("created")].toVariant().toLongLong();
     h.updatedMs = obj[QStringLiteral("updated")].toVariant().toLongLong();
     if (h.status.isEmpty())
@@ -77,6 +81,7 @@ HazardStore::HazardStore(QObject *parent)
     : QAbstractListModel(parent)
 {
     load();
+    loadLookups();
     repopulate();
 }
 
@@ -204,10 +209,116 @@ QString HazardStore::reviewIntervalLabelFor(int months) const
     }
 }
 
+// Built-in ATA 100 chapters (fixed-wing subset), including the military
+// chapters "25-70 - Crew Escape System" and "94 - Weapons". These strings
+// are the exact values saved in hazards.json, so they must never be
+// renamed or translated. User-added chapters are stored in lookups.json.
+static QStringList builtinAtaChapters()
+{
+    QStringList list;
+    list << QStringLiteral("21 - Air Conditioning & Pressurization")
+         << QStringLiteral("22 - Auto Flight")
+         << QStringLiteral("23 - Communications")
+         << QStringLiteral("24 - Electrical Power")
+         << QStringLiteral("25 - Equipment & Furnishings")
+         << QStringLiteral("25-70 - Crew Escape System")
+         << QStringLiteral("26 - Fire Protection")
+         << QStringLiteral("27 - Flight Controls")
+         << QStringLiteral("28 - Fuel")
+         << QStringLiteral("29 - Hydraulics")
+         << QStringLiteral("30 - Ice & Rain Protection")
+         << QStringLiteral("31 - Indicating & Recording")
+         << QStringLiteral("32 - Landing Gear")
+         << QStringLiteral("33 - Lights")
+         << QStringLiteral("34 - Navigation")
+         << QStringLiteral("35 - Oxygen")
+         << QStringLiteral("36 - Pneumatics")
+         << QStringLiteral("38 - Water & Waste")
+         << QStringLiteral("44 - Cabin Systems")
+         << QStringLiteral("45 - Central & Integrated System")
+         << QStringLiteral("46 - Information Systems")
+         << QStringLiteral("49 - APU")
+         << QStringLiteral("51 - Standard Practices & Structures")
+         << QStringLiteral("52 - Doors")
+         << QStringLiteral("53 - Fuselage")
+         << QStringLiteral("54 - Nacelles & Pylons")
+         << QStringLiteral("55 - Stabilizers")
+         << QStringLiteral("56 - Windows")
+         << QStringLiteral("57 - Wings")
+         << QStringLiteral("61 - Propellers")
+         << QStringLiteral("70 - Standard Practices (Engine)")
+         << QStringLiteral("71 - Power Plant")
+         << QStringLiteral("72 - Engine")
+         << QStringLiteral("73 - Engine Fuel & Control")
+         << QStringLiteral("74 - Ignition")
+         << QStringLiteral("75 - Engine Air & Bleed")
+         << QStringLiteral("76 - Engine Controls")
+         << QStringLiteral("77 - Engine Indicating")
+         << QStringLiteral("78 - Exhaust")
+         << QStringLiteral("79 - Engine Oil")
+         << QStringLiteral("80 - Engine Starting")
+         << QStringLiteral("83 - Accessory Gearboxes")
+         << QStringLiteral("94 - Weapons");
+    return list;
+}
+
+// Built-in certification baselines. "FAR Parts" and "EASA CS" are kept
+// generic on purpose: they cover several aircraft categories (e.g.
+// FAR Part 23/25, CS-23/CS-25). User-added baselines are stored in
+// lookups.json and are never renamed by the app.
+static QStringList builtinBaselines()
+{
+    QStringList list;
+    list << QStringLiteral("MIL-HDBK-516C")
+         << QStringLiteral("EMACC")
+         << QStringLiteral("FAR Parts")
+         << QStringLiteral("EASA CS");
+    return list;
+}
+
+QStringList HazardStore::ataChapters() const
+{
+    return builtinAtaChapters() + m_customAtaChapters;
+}
+
+QStringList HazardStore::baselines() const
+{
+    return builtinBaselines() + m_customBaselines;
+}
+
+void HazardStore::addAtaChapter(const QString &chapter)
+{
+    const QString trimmed = chapter.trimmed();
+    // Ignore empty entries and duplicates of anything already pickable.
+    if (trimmed.isEmpty() || ataChapters().contains(trimmed))
+        return;
+    m_customAtaChapters.append(trimmed);
+    std::sort(m_customAtaChapters.begin(), m_customAtaChapters.end());
+    saveLookups();
+    emit ataChaptersChanged();
+}
+
+void HazardStore::addBaseline(const QString &baseline)
+{
+    const QString trimmed = baseline.trimmed();
+    if (trimmed.isEmpty() || baselines().contains(trimmed))
+        return;
+    m_customBaselines.append(trimmed);
+    std::sort(m_customBaselines.begin(), m_customBaselines.end());
+    saveLookups();
+    emit baselinesChanged();
+}
+
 QString HazardStore::storagePath() const
 {
     QString base = QStandardPaths::writableLocation(QStandardPaths::DataLocation);
     return base + QStringLiteral("/hazards.json");
+}
+
+QString HazardStore::lookupPath() const
+{
+    QString base = QStandardPaths::writableLocation(QStandardPaths::DataLocation);
+    return base + QStringLiteral("/lookups.json");
 }
 
 void HazardStore::load()
@@ -222,6 +333,42 @@ void HazardStore::load()
         m_all.append(h);
         m_nextId = qMax(m_nextId, h.id + 1);
     }
+}
+
+// Custom picker entries live in their own JSON file so hazards.json stays
+// untouched. A missing file simply means "no custom entries yet".
+void HazardStore::loadLookups()
+{
+    QFile file(lookupPath());
+    if (!file.open(QIODevice::ReadOnly))
+        return;
+    const QJsonObject obj = QJsonDocument::fromJson(file.readAll()).object();
+    m_customAtaChapters.clear();
+    const QJsonArray ata = obj[QStringLiteral("ataChapters")].toArray();
+    for (const QJsonValue &v : ata)
+        m_customAtaChapters.append(v.toString());
+    m_customBaselines.clear();
+    const QJsonArray bases = obj[QStringLiteral("baselines")].toArray();
+    for (const QJsonValue &v : bases)
+        m_customBaselines.append(v.toString());
+}
+
+void HazardStore::saveLookups()
+{
+    QDir().mkpath(QFileInfo(lookupPath()).absolutePath());
+    QJsonObject obj;
+    QJsonArray ata;
+    for (const QString &c : m_customAtaChapters)
+        ata.append(c);
+    obj[QStringLiteral("ataChapters")] = ata;
+    QJsonArray bases;
+    for (const QString &b : m_customBaselines)
+        bases.append(b);
+    obj[QStringLiteral("baselines")] = bases;
+    QFile file(lookupPath());
+    if (!file.open(QIODevice::WriteOnly))
+        return;
+    file.write(QJsonDocument(obj).toJson());
 }
 
 void HazardStore::save()
@@ -244,13 +391,16 @@ void HazardStore::repopulate()
         // "active" is a virtual filter: hazards still managed in this
         // register (open, mitigated, alarp). Closed and transferred
         // hazards only show up when no filter is set.
-        const bool matches = m_filterStatus.isEmpty()
+        const bool statusMatch = m_filterStatus.isEmpty()
                 || h.status == m_filterStatus
                 || (m_filterStatus == QStringLiteral("active")
                     && (h.status == QStringLiteral("open")
                         || h.status == QStringLiteral("mitigated")
                         || h.status == QStringLiteral("alarp")));
-        if (matches)
+        // Optional certification baseline filter: empty = no filtering.
+        const bool baselineMatch = m_baselineFilter.isEmpty()
+                || h.certBaseline == m_baselineFilter;
+        if (statusMatch && baselineMatch)
             m_visible.append(h);
     }
     std::sort(m_visible.begin(), m_visible.end(), [](const Hazard &a, const Hazard &b) {
@@ -303,6 +453,8 @@ QHash<int, QByteArray> HazardStore::roleNames() const
     roles[ReviewedDateRole] = "reviewedDate";
     roles[NextReviewRole] = "nextReview";
     roles[ReviewDueRole] = "reviewDue";
+    roles[CertBaselineRole] = "certBaseline";
+    roles[CertCriteriaRole] = "certCriteria";
     return roles;
 }
 
@@ -351,6 +503,8 @@ QVariant HazardStore::data(const QModelIndex &index, int role) const
                 && h.status != QStringLiteral("closed")
                 && h.status != QStringLiteral("transferred");
     }
+    case CertBaselineRole: return h.certBaseline;
+    case CertCriteriaRole: return h.certCriteria;
     case CreatedRole: return h.createdMs;
     case UpdatedRole: return h.updatedMs;
     default: return QVariant();
@@ -387,6 +541,10 @@ static void fillHazard(Hazard &h, const QVariantMap &data, qlonglong nowMs)
         h.reviewInterval = qMax(0, data[QStringLiteral("reviewInterval")].toInt());
     if (data.contains(QStringLiteral("reviewedDate")))
         h.lastReviewed = QDate::fromString(data[QStringLiteral("reviewedDate")].toString(), Qt::ISODate);
+    if (data.contains(QStringLiteral("certBaseline")))
+        h.certBaseline = data[QStringLiteral("certBaseline")].toString();
+    if (data.contains(QStringLiteral("certCriteria")))
+        h.certCriteria = data[QStringLiteral("certCriteria")].toString();
     h.updatedMs = nowMs;
 }
 
@@ -450,6 +608,8 @@ QVariantMap HazardStore::getHazard(int id) const
             map[QStringLiteral("reviewInterval")] = h.reviewInterval;
             map[QStringLiteral("reviewedDate")] = h.lastReviewed.isValid()
                     ? h.lastReviewed.toString(Qt::ISODate) : QString();
+            map[QStringLiteral("certBaseline")] = h.certBaseline;
+            map[QStringLiteral("certCriteria")] = h.certCriteria;
             // The next review date and the overdue flag are derived data,
             // computed here so the detail page can show them without
             // duplicating the calculation in QML.
@@ -516,5 +676,14 @@ void HazardStore::setFilterStatus(const QString &status)
         return;
     m_filterStatus = status;
     emit filterStatusChanged();
+    repopulate();
+}
+
+void HazardStore::setBaselineFilter(const QString &baseline)
+{
+    if (m_baselineFilter == baseline)
+        return;
+    m_baselineFilter = baseline;
+    emit baselineFilterChanged();
     repopulate();
 }
