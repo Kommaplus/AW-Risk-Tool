@@ -4,11 +4,12 @@
 #include <QAbstractListModel>
 #include <QJsonObject>
 #include <QDate>
+#include <QStringList>
 
 struct Hazard {
     int id = 0;
     QString aircraft;      // registration or type
-    QString system;        // affected system / ATA chapter
+    QString system;        // affected system: an ATA chapter string, e.g. "32 - Landing Gear"
     QString title;
     QString description;
     int severity = 1;      // 1..4
@@ -21,6 +22,8 @@ struct Hazard {
     QDate acceptedDate;    // date the residual risk was accepted
     int reviewInterval = 0;   // recurring re-evaluation in months, 0 = off
     QDate lastReviewed;      // date of the last re-evaluation, if any
+    QString certBaseline;  // certification baseline, e.g. "MIL-HDBK-516C"
+    QString certCriteria;  // baseline criteria points, e.g. "5.3.2.1, 5.3.1"
     qlonglong createdMs = 0;
     qlonglong updatedMs = 0;
 
@@ -37,6 +40,11 @@ class HazardStore : public QAbstractListModel
     Q_OBJECT
     Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
     Q_PROPERTY(QString filterStatus READ filterStatus WRITE setFilterStatus NOTIFY filterStatusChanged)
+    Q_PROPERTY(QString baselineFilter READ baselineFilter WRITE setBaselineFilter NOTIFY baselineFilterChanged)
+    // Pickable values for the pickers. Built-in entries plus the custom
+    // ones added by the user (persisted in lookups.json).
+    Q_PROPERTY(QStringList ataChapters READ ataChapters NOTIFY ataChaptersChanged)
+    Q_PROPERTY(QStringList baselines READ baselines NOTIFY baselinesChanged)
 
 public:
     enum Roles {
@@ -48,7 +56,8 @@ public:
         MitigationRole, OwnerRole, StatusRole, DueDateRole,
         CreatedRole, UpdatedRole, HasDueDateRole,
         AcceptedByRole, AcceptedDateRole, HasAcceptedDateRole,
-        ReviewIntervalRole, ReviewedDateRole, NextReviewRole, ReviewDueRole
+        ReviewIntervalRole, ReviewedDateRole, NextReviewRole, ReviewDueRole,
+        CertBaselineRole, CertCriteriaRole
     };
 
     explicit HazardStore(QObject *parent = nullptr);
@@ -86,8 +95,16 @@ public:
     // User-facing label for a review interval in months, 0 = "Off".
     Q_INVOKABLE QString reviewIntervalLabelFor(int months) const;
 
+    // Add a custom ATA chapter / certification baseline to the pickers.
+    // Empty values and duplicates are ignored; accepted entries are saved
+    // to lookups.json and survive an app restart.
+    Q_INVOKABLE void addAtaChapter(const QString &chapter);
+    Q_INVOKABLE void addBaseline(const QString &baseline);
+
     QString filterStatus() const { return m_filterStatus; }
     void setFilterStatus(const QString &status);
+    QString baselineFilter() const { return m_baselineFilter; }
+    void setBaselineFilter(const QString &baseline);
 
     // AWB-150B Attachment 2, Table 4. Severity 1..4 (I Catastrophic ..
     // IV Negligible), likelihood 1..5 (A Frequent .. E Improbable).
@@ -106,16 +123,28 @@ public:
 signals:
     void countChanged();
     void filterStatusChanged();
+    void baselineFilterChanged();
+    void ataChaptersChanged();
+    void baselinesChanged();
 
 private:
     void load();
     void save();
     void repopulate();
+    void loadLookups();
+    void saveLookups();
     QString storagePath() const;
+    QString lookupPath() const;
+
+    QStringList ataChapters() const;
+    QStringList baselines() const;
 
     QList<Hazard> m_all;
     QList<Hazard> m_visible;
     QString m_filterStatus;
+    QString m_baselineFilter;
+    QStringList m_customAtaChapters;
+    QStringList m_customBaselines;
     int m_nextId = 1;
 };
 
