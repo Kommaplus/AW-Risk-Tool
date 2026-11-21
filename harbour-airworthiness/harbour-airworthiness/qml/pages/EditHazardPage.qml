@@ -23,7 +23,9 @@ Dialog {
             status: statusButton.statusValue,
             dueDate: dueDateField.dateText,
             acceptedBy: acceptedByField.text.trim(),
-            acceptedDate: acceptedDateField.dateText
+            acceptedDate: acceptedDateField.dateText,
+            reviewInterval: reviewIntervalButton.intervalValue,
+            reviewedDate: reviewedDateField.dateText
         }
         if (editing)
             store.updateHazard(hazardId, data)
@@ -57,12 +59,16 @@ Dialog {
             dueDateField.dateText = h.dueDate || ""
             acceptedByField.text = h.acceptedBy || ""
             acceptedDateField.dateText = h.acceptedDate || ""
+            reviewIntervalButton.intervalValue = h.reviewInterval !== undefined ? h.reviewInterval : 0
+            reviewedDateField.dateText = h.reviewedDate || ""
         }
     }
 
     SilicaFlickable {
         anchors.fill: parent
         contentHeight: column.height + Theme.paddingLarge
+
+        ScrollDecorator {}
 
         Column {
             id: column
@@ -187,13 +193,56 @@ Dialog {
                 }
             }
 
+            SectionHeader { text: qsTr("Risk review (re-evaluation)") }
+
+            ValueButton {
+                id: reviewIntervalButton
+                property int intervalValue: 0   // months, 0 = off
+
+                width: parent.width
+                label: qsTr("Review interval")
+                value: store.reviewIntervalLabelFor(intervalValue)
+                onClicked: {
+                    var picker = pageStack.push(Qt.resolvedUrl("ReviewIntervalPickerPage.qml"),
+                                                { currentInterval: intervalValue })
+                    picker.intervalPicked.connect(function(months) {
+                        reviewIntervalButton.intervalValue = months
+                    })
+                }
+            }
+
+            ValueButton {
+                id: reviewedDateField
+                property string dateText: ""   // stored in ISO format yyyy-MM-dd
+
+                width: parent.width
+                label: qsTr("Last reviewed")
+                value: dateText === ""
+                       ? qsTr("Not set")
+                       : Qt.formatDate(new Date(dateText), "dd MMM yyyy")
+                onClicked: {
+                    var initial = dateText !== "" ? new Date(dateText) : new Date()
+                    var picker = pageStack.push(reviewDatePickerComponent, { date: initial })
+                    picker.accepted.connect(function() {
+                        // Record when the risk was last re-evaluated; the
+                        // next review is computed from this date.
+                        reviewedDateField.dateText = Qt.formatDate(picker.date, "yyyy-MM-dd")
+                    })
+                }
+
+                Component {
+                    id: reviewDatePickerComponent
+                    DatePickerDialog {}
+                }
+            }
+
             ValueButton {
                 id: statusButton
                 property string statusValue: "open"
 
                 width: parent.width
                 label: qsTr("Status")
-                value: statusValue
+                value: store.statusLabelFor(statusValue)
 
                 onClicked: {
                     var picker = pageStack.push(Qt.resolvedUrl("StatusPickerPage.qml"),
