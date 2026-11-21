@@ -125,11 +125,11 @@ Dialog {
             Label {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
-                text: qsTr("Risk Assessment Code: %1%2 — %3 (HRI %4)")
+                text: qsTr("Risk Assessment Code: %1%2 — %3 (RAC %4)")
                     .arg(store.severityCodeFor(severitySlider.value))
                     .arg(store.likelihoodCodeFor(likelihoodSlider.value))
                     .arg(store.riskCategoryFor(severitySlider.value, likelihoodSlider.value))
-                    .arg(severitySlider.value * likelihoodSlider.value)
+                    .arg(store.racFor(severitySlider.value, likelihoodSlider.value))
                 color: store.riskColorFor(severitySlider.value, likelihoodSlider.value)
                 font.pixelSize: Theme.fontSizeMedium
             }
