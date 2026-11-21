@@ -17,6 +17,8 @@ struct Hazard {
     QString owner;
     QString status;        // open / mitigated / closed
     QDate dueDate;
+    QString acceptedBy;    // person or authority accepting the residual risk
+    QDate acceptedDate;    // date the residual risk was accepted
     qlonglong createdMs = 0;
     qlonglong updatedMs = 0;
 
@@ -39,7 +41,8 @@ public:
         LikelihoodRole, LikelihoodNameRole, LikelihoodCodeRole,
         RiskIndexRole, RiskCategoryRole, RiskColorRole, RacRole,
         MitigationRole, OwnerRole, StatusRole, DueDateRole,
-        CreatedRole, UpdatedRole, HasDueDateRole
+        CreatedRole, UpdatedRole, HasDueDateRole,
+        AcceptedByRole, AcceptedDateRole, HasAcceptedDateRole
     };
 
     explicit HazardStore(QObject *parent = nullptr);
