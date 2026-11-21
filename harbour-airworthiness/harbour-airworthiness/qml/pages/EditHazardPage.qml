@@ -21,7 +21,9 @@ Dialog {
             mitigation: mitigationField.text,
             owner: ownerField.text.trim(),
             status: statusButton.statusValue,
-            dueDate: dueDateField.dateText
+            dueDate: dueDateField.dateText,
+            acceptedBy: acceptedByField.text.trim(),
+            acceptedDate: acceptedDateField.dateText
         }
         if (editing)
             store.updateHazard(hazardId, data)
@@ -36,10 +38,10 @@ Dialog {
       property bool fieldsLoaded: false
 
     onStatusChanged: {
-        // Fyld felterne med hazardens gemte data KUN én gang, når redigeringen
-        // åbnes. PageStatus.Activating udløses også når man vender tilbage fra
-        // StatusPickerPage/DatePicker — og overskrev ellers brugerens nye
-        // indtastninger med de gamle gemte værdier, så ændringer blev tabt.
+        // Fill the fields with the hazard's saved data ONLY once, when the
+        // editor opens. PageStatus.Activating is also emitted when returning
+        // from StatusPickerPage/DatePicker — it would otherwise overwrite
+        // the user's edits with the old saved values, losing changes.
         if (status === PageStatus.Activating && editing && !fieldsLoaded) {
             fieldsLoaded = true
             var h = store.getHazard(hazardId)
@@ -53,6 +55,8 @@ Dialog {
             ownerField.text = h.owner || ""
             statusButton.statusValue = h.status || "open"
             dueDateField.dateText = h.dueDate || ""
+            acceptedByField.text = h.acceptedBy || ""
+            acceptedDateField.dateText = h.acceptedDate || ""
         }
     }
 
@@ -147,6 +151,40 @@ Dialog {
                 width: parent.width
                 placeholderText: qsTr("Responsible person")
                 label: qsTr("Owner")
+            }
+
+            SectionHeader { text: qsTr("Risk acceptance (residual risk)") }
+
+            TextField {
+                id: acceptedByField
+                width: parent.width
+                placeholderText: qsTr("Name / role of the risk accepting authority")
+                label: qsTr("Risk accepted by")
+            }
+
+            ValueButton {
+                id: acceptedDateField
+                property string dateText: ""   // stored in ISO format yyyy-MM-dd
+
+                width: parent.width
+                label: qsTr("Acceptance date")
+                value: dateText === ""
+                       ? qsTr("Not set")
+                       : Qt.formatDate(new Date(dateText), "dd MMM yyyy")
+                onClicked: {
+                    var initial = dateText !== "" ? new Date(dateText) : new Date()
+                    var picker = pageStack.push(acceptDatePickerComponent, { date: initial })
+                    picker.accepted.connect(function() {
+                        // Store the date in ISO format so HazardStore can
+                        // parse it back (same pattern as the due date field).
+                        acceptedDateField.dateText = Qt.formatDate(picker.date, "yyyy-MM-dd")
+                    })
+                }
+
+                Component {
+                    id: acceptDatePickerComponent
+                    DatePickerDialog {}
+                }
             }
 
             ValueButton {
