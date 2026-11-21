@@ -130,6 +130,20 @@ Page {
                 value: store.riskCategoryFor(severity, likelihood)
             }
 
+            SectionHeader { text: qsTr("Risk acceptance (residual risk)") }
+
+            DetailItem {
+                label: qsTr("Accepted by")
+                value: hazard && hazard.acceptedBy
+                      ? hazard.acceptedBy : qsTr("Not accepted")
+            }
+            DetailItem {
+                label: qsTr("Acceptance date")
+                value: hazard && hazard.acceptedDate
+                      ? Qt.formatDate(new Date(hazard.acceptedDate), "dd MMM yyyy")
+                      : qsTr("—")
+            }
+
             SectionHeader { text: qsTr("Details") }
 
             DetailItem {
