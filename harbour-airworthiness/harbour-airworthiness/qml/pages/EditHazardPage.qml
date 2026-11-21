@@ -13,7 +13,7 @@ Dialog {
     onAccepted: {
         var data = {
             aircraft: aircraftField.text.trim(),
-            system: systemField.text.trim(),
+            system: systemField.chapterValue,
             title: titleField.text.trim(),
             description: descriptionField.text,
             severity: severitySlider.value,
@@ -25,7 +25,9 @@ Dialog {
             acceptedBy: acceptedByField.text.trim(),
             acceptedDate: acceptedDateField.dateText,
             reviewInterval: reviewIntervalButton.intervalValue,
-            reviewedDate: reviewedDateField.dateText
+            reviewedDate: reviewedDateField.dateText,
+            certBaseline: baselineButton.baselineValue,
+            certCriteria: criteriaField.text.trim()
         }
         if (editing)
             store.updateHazard(hazardId, data)
@@ -42,13 +44,13 @@ Dialog {
     onStatusChanged: {
         // Fill the fields with the hazard's saved data ONLY once, when the
         // editor opens. PageStatus.Activating is also emitted when returning
-        // from StatusPickerPage/DatePicker — it would otherwise overwrite
+        // from a picker/DatePicker — it would otherwise overwrite
         // the user's edits with the old saved values, losing changes.
         if (status === PageStatus.Activating && editing && !fieldsLoaded) {
             fieldsLoaded = true
             var h = store.getHazard(hazardId)
             aircraftField.text = h.aircraft || ""
-            systemField.text = h.system || ""
+            systemField.chapterValue = h.system || ""
             titleField.text = h.title || ""
             descriptionField.text = h.description || ""
             severitySlider.value = h.severity !== undefined ? h.severity : 2
@@ -61,6 +63,8 @@ Dialog {
             acceptedDateField.dateText = h.acceptedDate || ""
             reviewIntervalButton.intervalValue = h.reviewInterval !== undefined ? h.reviewInterval : 0
             reviewedDateField.dateText = h.reviewedDate || ""
+            baselineButton.baselineValue = h.certBaseline || ""
+            criteriaField.text = h.certCriteria || ""
         }
     }
 
@@ -93,11 +97,45 @@ Dialog {
                 label: qsTr("Aircraft")
             }
 
-            TextField {
+            ValueButton {
                 id: systemField
+                property string chapterValue: ""   // full ATA chapter string, stored as-is
+
                 width: parent.width
-                placeholderText: qsTr("System / ATA chapter (e.g. 32 - Landing gear)")
-                label: qsTr("System")
+                label: qsTr("System (ATA)")
+                value: chapterValue === "" ? qsTr("Not set") : chapterValue
+                onClicked: {
+                    var picker = pageStack.push(Qt.resolvedUrl("AtaChapterPickerPage.qml"),
+                                                { currentChapter: chapterValue })
+                    picker.chapterPicked.connect(function(chapter) {
+                        systemField.chapterValue = chapter
+                    })
+                }
+            }
+
+            ValueButton {
+                id: baselineButton
+                property string baselineValue: ""   // stored baseline, e.g. "MIL-HDBK-516C"
+
+                // Certification baseline directly under the system: which
+                // requirements set the criteria points below refer to.
+                width: parent.width
+                label: qsTr("Certification baseline")
+                value: baselineValue === "" ? qsTr("Not specified") : baselineValue
+                onClicked: {
+                    var picker = pageStack.push(Qt.resolvedUrl("BaselinePickerPage.qml"),
+                                                { currentBaseline: baselineValue })
+                    picker.baselinePicked.connect(function(baseline) {
+                        baselineButton.baselineValue = baseline
+                    })
+                }
+            }
+
+            TextField {
+                id: criteriaField
+                width: parent.width
+                placeholderText: qsTr("e.g. 5.3.2.1, 5.3.1")
+                label: qsTr("Criteria points")
             }
 
             TextArea {
