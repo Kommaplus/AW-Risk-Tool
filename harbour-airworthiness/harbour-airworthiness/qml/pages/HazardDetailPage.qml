@@ -180,8 +180,20 @@ Page {
                 value: hazard ? hazard.aircraft : ""
             }
             DetailItem {
-                label: qsTr("System")
+                label: qsTr("System (ATA)")
                 value: hazard ? hazard.system : ""
+            }
+            DetailItem {
+                // Shown directly under the system: which certification
+                // baseline the hazard relates to.
+                label: qsTr("Certification baseline")
+                value: hazard && hazard.certBaseline
+                      ? hazard.certBaseline : qsTr("Not specified")
+            }
+            DetailItem {
+                label: qsTr("Criteria points")
+                value: hazard && hazard.certCriteria
+                      ? hazard.certCriteria : qsTr("Not specified")
             }
             DetailItem {
                 label: qsTr("Owner")
