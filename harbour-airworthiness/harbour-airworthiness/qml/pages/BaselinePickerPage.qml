@@ -12,8 +12,8 @@ Dialog {
     property bool filterMode: false
     signal baselinePicked(string baseline)
 
-    // Only used for the picker lists; addBaseline() writes lookups.json,
-    // never hazards.json.
+    // Only used for the picker lists; addBaseline()/renameBaseline()
+    // write lookups.json (and saved hazards on rename), never anything else.
     HazardStore {
         id: lookupStore
     }
@@ -50,26 +50,68 @@ Dialog {
         }
     }
 
+    Component {
+        id: renameBaselineComponent
+        Dialog {
+            id: renameDialog
+
+            // Passed in when the dialog is pushed. Accepting with a new
+            // text renames the custom baseline AND updates the hazards
+            // that still store the old spelling.
+            property string oldName
+
+            onAccepted: {
+                var name = renameField.text.trim()
+                if (name.length > 0 && name !== renameDialog.oldName)
+                    lookupStore.renameBaseline(renameDialog.oldName, name)
+            }
+
+            SilicaFlickable {
+                anchors.fill: parent
+                contentHeight: renameColumn.height + Theme.paddingLarge
+
+                Column {
+                    id: renameColumn
+                    width: parent.width
+
+                    PageHeader { title: qsTr("Rename baseline") }
+
+                    TextField {
+                        id: renameField
+                        width: parent.width
+                        text: renameDialog.oldName
+                        label: qsTr("Baseline")
+                    }
+                }
+            }
+        }
+    }
+
     SilicaListView {
         anchors.fill: parent
 
-        // Rebuilt automatically when custom baselines are added or the
-        // current value changes ("__add__" is a pseudo entry, never saved).
+        // Rebuilt automatically when custom baselines are added, renamed
+        // or removed or when the current value changes ("__add__" is a
+        // pseudo entry, never saved).
         model: {
             var entries = []
             entries.push({
                 value: "",
                 label: picker.filterMode ? qsTr("All baselines")
-                                         : qsTr("Not specified")
+                                         : qsTr("Not specified"),
+                custom: false
             })
             var known = lookupStore.baselines
+            var customs = lookupStore.customBaselines
             if (picker.currentBaseline !== ""
                     && known.indexOf(picker.currentBaseline) === -1)
                 entries.push({ value: picker.currentBaseline,
-                               label: picker.currentBaseline })
+                               label: picker.currentBaseline, custom: false })
             for (var i = 0; i < known.length; ++i)
-                entries.push({ value: known[i], label: known[i] })
-            entries.push({ value: "__add__", label: qsTr("Add custom baseline...") })
+                entries.push({ value: known[i], label: known[i],
+                               custom: customs.indexOf(known[i]) !== -1 })
+            entries.push({ value: "__add__",
+                          label: qsTr("Add custom baseline..."), custom: false })
             return entries
         }
         header: PageHeader {
@@ -79,6 +121,8 @@ Dialog {
         }
 
         delegate: ListItem {
+            id: listItem
+
             Label {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
@@ -88,6 +132,25 @@ Dialog {
                        ? Theme.highlightColor : Theme.primaryColor
                 anchors.verticalCenter: parent.verticalCenter
             }
+
+            // Press and hold: only user-added baselines can be renamed or
+            // removed; the built-in list stays stable for saved hazards.
+            menu: ContextMenu {
+                MenuItem {
+                    text: qsTr("Rename")
+                    visible: modelData.custom
+                    onClicked: pageStack.push(renameBaselineComponent,
+                                             { oldName: modelData.value })
+                }
+                MenuItem {
+                    text: qsTr("Delete")
+                    visible: modelData.custom
+                    onClicked: listItem.remorseAction(qsTr("Deleting"), function() {
+                        lookupStore.removeBaseline(modelData.value)
+                    })
+                }
+            }
+
             onClicked: {
                 if (modelData.value === "__add__") {
                     pageStack.push(addBaselineComponent)
