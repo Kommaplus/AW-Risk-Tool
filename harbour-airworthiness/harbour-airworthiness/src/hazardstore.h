@@ -45,6 +45,10 @@ class HazardStore : public QAbstractListModel
     // ones added by the user (persisted in lookups.json).
     Q_PROPERTY(QStringList ataChapters READ ataChapters NOTIFY ataChaptersChanged)
     Q_PROPERTY(QStringList baselines READ baselines NOTIFY baselinesChanged)
+    // The user-added entries only (a subset of the lists above). The
+    // pickers use these to offer Rename/Delete on custom entries only.
+    Q_PROPERTY(QStringList customAtaChapters READ customAtaChapters NOTIFY ataChaptersChanged)
+    Q_PROPERTY(QStringList customBaselines READ customBaselines NOTIFY baselinesChanged)
 
 public:
     enum Roles {
@@ -101,6 +105,21 @@ public:
     Q_INVOKABLE void addAtaChapter(const QString &chapter);
     Q_INVOKABLE void addBaseline(const QString &baseline);
 
+    // Rename/remove a user-added entry. Renaming also updates the hazards
+    // that still store the old spelling, so a late typo fix follows the
+    // data. Built-in entries are ignored: saved hazards may already
+    // reference them, and the built-in list must stay stable.
+    Q_INVOKABLE void removeAtaChapter(const QString &chapter);
+    Q_INVOKABLE void renameAtaChapter(const QString &from, const QString &to);
+    Q_INVOKABLE void removeBaseline(const QString &baseline);
+    Q_INVOKABLE void renameBaseline(const QString &from, const QString &to);
+
+    // Write the whole register (all hazards, not just the visible rows)
+    // to the shared Documents folder. Returns the written file path, or
+    // an empty string when writing failed.
+    Q_INVOKABLE QString exportToCsv() const;
+    Q_INVOKABLE QString exportToJson() const;
+
     QString filterStatus() const { return m_filterStatus; }
     void setFilterStatus(const QString &status);
     QString baselineFilter() const { return m_baselineFilter; }
@@ -138,6 +157,8 @@ private:
 
     QStringList ataChapters() const;
     QStringList baselines() const;
+    QStringList customAtaChapters() const { return m_customAtaChapters; }
+    QStringList customBaselines() const { return m_customBaselines; }
 
     QList<Hazard> m_all;
     QList<Hazard> m_visible;
