@@ -231,6 +231,16 @@ Dialog {
                 }
             }
 
+            Button {
+                // A set date can now be removed again: clearing sends an
+                // empty string, and the store reads it as "no date".
+                visible: acceptedDateField.dateText !== ""
+                anchors.horizontalCenter: parent.horizontalCenter
+                preferredWidth: Theme.buttonWidthSmall
+                text: qsTr("Clear")
+                onClicked: acceptedDateField.dateText = ""
+            }
+
             SectionHeader { text: qsTr("Risk review (re-evaluation)") }
 
             ValueButton {
@@ -272,6 +282,14 @@ Dialog {
                     id: reviewDatePickerComponent
                     DatePickerDialog {}
                 }
+            }
+
+            Button {
+                visible: reviewedDateField.dateText !== ""
+                anchors.horizontalCenter: parent.horizontalCenter
+                preferredWidth: Theme.buttonWidthSmall
+                text: qsTr("Clear")
+                onClicked: reviewedDateField.dateText = ""
             }
 
             ValueButton {
@@ -316,6 +334,14 @@ Dialog {
                     id: datePickerComponent
                     DatePickerDialog {}
                 }
+            }
+
+            Button {
+                visible: dueDateField.dateText !== ""
+                anchors.horizontalCenter: parent.horizontalCenter
+                preferredWidth: Theme.buttonWidthSmall
+                text: qsTr("Clear")
+                onClicked: dueDateField.dateText = ""
             }
         }
     }
