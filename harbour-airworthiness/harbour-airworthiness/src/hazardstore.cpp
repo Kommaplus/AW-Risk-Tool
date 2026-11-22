@@ -309,6 +309,185 @@ void HazardStore::addBaseline(const QString &baseline)
     emit baselinesChanged();
 }
 
+void HazardStore::removeAtaChapter(const QString &chapter)
+{
+    const QString c = chapter.trimmed();
+    // Built-in chapters cannot be removed: saved hazards may use them.
+    if (!m_customAtaChapters.contains(c))
+        return;
+    // Hazards that already saved this chapter keep their stored text;
+    // only the pickable entry is removed.
+    m_customAtaChapters.removeAll(c);
+    saveLookups();
+    emit ataChaptersChanged();
+}
+
+void HazardStore::renameAtaChapter(const QString &from, const QString &to)
+{
+    const QString a = from.trimmed();
+    const QString b = to.trimmed();
+    // Only user-added entries can be renamed, never onto an empty name.
+    // Renaming onto an existing entry merges the two into one.
+    if (a.isEmpty() || b.isEmpty() || a == b || !m_customAtaChapters.contains(a))
+        return;
+    m_customAtaChapters.removeAll(a);
+    if (!ataChapters().contains(b)) {
+        m_customAtaChapters.append(b);
+        std::sort(m_customAtaChapters.begin(), m_customAtaChapters.end());
+    }
+    saveLookups();
+    emit ataChaptersChanged();
+    // Fixing a typo must follow the data: update every hazard that still
+    // stores the old spelling.
+    bool changed = false;
+    for (Hazard &h : m_all) {
+        if (h.system == a) {
+            h.system = b;
+            changed = true;
+        }
+    }
+    if (changed)
+        save();
+    repopulate();
+}
+
+void HazardStore::removeBaseline(const QString &baseline)
+{
+    const QString c = baseline.trimmed();
+    // Built-in baselines cannot be removed: saved hazards may use them.
+    if (!m_customBaselines.contains(c))
+        return;
+    // Hazards that already saved this baseline keep their stored text;
+    // only the pickable entry is removed.
+    m_customBaselines.removeAll(c);
+    saveLookups();
+    emit baselinesChanged();
+}
+
+void HazardStore::renameBaseline(const QString &from, const QString &to)
+{
+    const QString a = from.trimmed();
+    const QString b = to.trimmed();
+    if (a.isEmpty() || b.isEmpty() || a == b || !m_customBaselines.contains(a))
+        return;
+    m_customBaselines.removeAll(a);
+    if (!baselines().contains(b)) {
+        m_customBaselines.append(b);
+        std::sort(m_customBaselines.begin(), m_customBaselines.end());
+    }
+    saveLookups();
+    emit baselinesChanged();
+    // Fixing a typo must follow the data: update every hazard that still
+    // stores the old spelling.
+    bool changed = false;
+    for (Hazard &h : m_all) {
+        if (h.certBaseline == a) {
+            h.certBaseline = b;
+            changed = true;
+        }
+    }
+    if (changed)
+        save();
+    // Keep an active main-list filter consistent with the rename.
+    if (m_baselineFilter == a) {
+        m_baselineFilter = b;
+        emit baselineFilterChanged();
+    }
+    repopulate();
+}
+
+// Full path for an export file in the shared Documents folder, e.g.
+// ".../Documents/AW-Risk-Tool-hazards-2026-11-22.csv". The Documents
+// permission in the desktop file makes this folder visible inside the
+// app sandbox; without it the write fails and "" is returned.
+static QString exportFilePath(const QString &suffix)
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    const QString name = QStringLiteral("AW-Risk-Tool-hazards-%1.%2")
+            .arg(QDate::currentDate().toString(QStringLiteral("yyyy-MM-dd")))
+            .arg(suffix);
+    return dir + QStringLiteral("/") + name;
+}
+
+// Minimal RFC 4180 quoting: fields containing the separator, a double
+// quote or a line break are wrapped in double quotes, inner quotes
+// doubled up.
+static QString csvEscape(const QString &value)
+{
+    if (value.contains(QLatin1Char(';')) || value.contains(QLatin1Char('"'))
+            || value.contains(QLatin1Char('\n')) || value.contains(QLatin1Char('\r')))
+        return QStringLiteral("\"%1\"")
+                .arg(QString(value).replace(QLatin1Char('"'), QStringLiteral("\"\"")));
+    return value;
+}
+
+QString HazardStore::exportToCsv() const
+{
+    const QString path = exportFilePath(QStringLiteral("csv"));
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return QString();
+    const QLatin1Char sep(';');
+    // Semicolon separator: Excel/LibreOffice in Danish locales split on
+    // ';' out of the box. Change this line to ',' for standard tools.
+    QStringList header;
+    header << "id" << "aircraft" << "system" << "title" << "description"
+           << "severity" << "likelihood" << "RAC" << "risk category"
+           << "mitigation" << "owner" << "status" << "due date"
+           << "accepted by" << "acceptance date"
+           << "review interval (months)" << "last reviewed" << "next review"
+           << "certification baseline" << "criteria points"
+           << "created" << "updated";
+    QStringList lines;
+    lines.append(header.join(sep));
+    for (const Hazard &h : m_all) {
+        QStringList row;
+        row << QString::number(h.id)
+            << csvEscape(h.aircraft)
+            << csvEscape(h.system)
+            << csvEscape(h.title)
+            << csvEscape(h.description)
+            << QString::number(h.severity)
+            << QString::number(h.likelihood)
+            << QString::number(rac(h.severity, h.likelihood))
+            << csvEscape(riskCategory(h.severity, h.likelihood))
+            << csvEscape(h.mitigation)
+            << csvEscape(h.owner)
+            << csvEscape(statusLabelFor(h.status))
+            << csvEscape(h.dueDate.isValid() ? h.dueDate.toString(Qt::ISODate) : QString())
+            << csvEscape(h.acceptedBy)
+            << csvEscape(h.acceptedDate.isValid() ? h.acceptedDate.toString(Qt::ISODate) : QString())
+            << QString::number(h.reviewInterval)
+            << csvEscape(h.lastReviewed.isValid() ? h.lastReviewed.toString(Qt::ISODate) : QString())
+            << csvEscape(h.nextReviewDate().isValid() ? h.nextReviewDate().toString(Qt::ISODate) : QString())
+            << csvEscape(h.certBaseline)
+            << csvEscape(h.certCriteria)
+            << csvEscape(QDateTime::fromMSecsSinceEpoch(h.createdMs).toString(QStringLiteral("yyyy-MM-dd hh:mm")))
+            << csvEscape(QDateTime::fromMSecsSinceEpoch(h.updatedMs).toString(QStringLiteral("yyyy-MM-dd hh:mm")));
+        lines.append(row.join(sep));
+    }
+    // UTF-8 BOM so Excel detects the encoding (Danish characters).
+    file.write("\xEF\xBB\xBF");
+    file.write(lines.join(QLatin1Char('\n')).toUtf8());
+    file.write("\n");
+    return path;
+}
+
+QString HazardStore::exportToJson() const
+{
+    const QString path = exportFilePath(QStringLiteral("json"));
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return QString();
+    // Same shape as the internal hazards.json, so the export doubles
+    // as a backup of the whole register.
+    QJsonArray array;
+    for (const Hazard &h : m_all)
+        array.append(h.toJson());
+    file.write(QJsonDocument(array).toJson(QJsonDocument::Indented));
+    return path;
+}
+
 QString HazardStore::storagePath() const
 {
     QString base = QStandardPaths::writableLocation(QStandardPaths::DataLocation);
@@ -531,6 +710,8 @@ static void fillHazard(Hazard &h, const QVariantMap &data, qlonglong nowMs)
         h.owner = data[QStringLiteral("owner")].toString();
     if (data.contains(QStringLiteral("status")))
         h.status = data[QStringLiteral("status")].toString();
+    // An empty string clears the date: QDate::fromString() returns an
+    // invalid date, and the field shows "Not set" again.
     if (data.contains(QStringLiteral("dueDate")))
         h.dueDate = QDate::fromString(data[QStringLiteral("dueDate")].toString(), Qt::ISODate);
     if (data.contains(QStringLiteral("acceptedBy")))
