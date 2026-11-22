@@ -55,6 +55,10 @@ Page {
                 }
             }
             MenuItem {
+                text: qsTr("Export hazards")
+                onDelayedClick: pageStack.push(Qt.resolvedUrl("ExportPage.qml"))
+            }
+            MenuItem {
                 text: qsTr("Risk matrix")
                 onDelayedClick: pageStack.push(Qt.resolvedUrl("RiskMatrixPage.qml"))
             }
