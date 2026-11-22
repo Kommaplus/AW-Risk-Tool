@@ -409,16 +409,23 @@ static QString exportFilePath(const QString &suffix)
     return dir + QStringLiteral("/") + name;
 }
 
-// Minimal RFC 4180 quoting: fields containing the separator, a double
-// quote or a line break are wrapped in double quotes, inner quotes
-// doubled up.
+// Minimal RFC 4180 quoting: fields containing the separator or a double
+// quote are wrapped in double quotes, inner quotes doubled up.
+// One hazard occupies exactly one line: embedded line breaks would be
+// legal quoted CSV content, but simpler CSV parsers (e.g. Nextcloud
+// Office / Collabora on a direct open) drop such rows, so line breaks
+// are folded into spaces. Multi-line text is preserved in the app
+// itself and in the JSON export.
 static QString csvEscape(const QString &value)
 {
-    if (value.contains(QLatin1Char(';')) || value.contains(QLatin1Char('"'))
-            || value.contains(QLatin1Char('\n')) || value.contains(QLatin1Char('\r')))
+    QString v = value;
+    v.replace(QStringLiteral("\r\n"), QLatin1Char(' '));
+    v.replace(QLatin1Char('\r'), QLatin1Char(' '));
+    v.replace(QLatin1Char('\n'), QLatin1Char(' '));
+    if (v.contains(QLatin1Char(';')) || v.contains(QLatin1Char('"')))
         return QStringLiteral("\"%1\"")
-                .arg(QString(value).replace(QLatin1Char('"'), QStringLiteral("\"\"")));
-    return value;
+                .arg(v.replace(QLatin1Char('"'), QStringLiteral("\"\"")));
+    return v;
 }
 
 QString HazardStore::exportToCsv() const
