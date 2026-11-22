@@ -2,7 +2,7 @@ Name:       harbour-airworthiness
 
 Summary:    Airworthiness Risk Management
 Version:    0.1.0
-Release:    8
+Release:    9
 License:    BSD-3-Clause
 URL:        https://github.com/Kommaplus/AW-Risk-Tool
 Source0:    %{name}-%{version}.tar.bz2
