@@ -419,7 +419,7 @@ static QString exportFilePath(const QString &suffix)
 static QString csvEscape(const QString &value)
 {
     QString v = value;
-    v.replace(QStringLiteral("\r\n"), QLatin1Char(' '));
+    v.replace(QStringLiteral("\r\n"), QStringLiteral(" "));
     v.replace(QLatin1Char('\r'), QLatin1Char(' '));
     v.replace(QLatin1Char('\n'), QLatin1Char(' '));
     if (v.contains(QLatin1Char(';')) || v.contains(QLatin1Char('"')))
